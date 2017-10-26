@@ -1,16 +1,17 @@
-let rec applyPreds (expr:expr) (preds:predicate list) : expr =
+open Expr
+
+let rec applyPreds expr preds =
   match preds with
   | [] -> expr
   | first :: rest ->
     match first with
-    (* simple case: equality predicate *)
-    | Compare(Eq, VAR(table), (CONST(_) as const))
-    | Compare(Eq, (CONST(_) as const), VAR(table)) ->
+    | Compare(_, VAR(table), (CONST(_) as const))
+    | Compare(_, (CONST(_) as const), VAR(table)) ->
       match expr with
       | SCAN(childTable) ->
         if childTable = table then
-          (* apply projection to SCAN *)
-          PROJECT(first, expr)
+          (* apply selection right after SCAN *)
+          SELECT(first, expr)
         else
           (* try next predicate *)
           applyPreds expr rest
@@ -33,13 +34,13 @@ let rec applyPreds (expr:expr) (preds:predicate list) : expr =
 
 let rec pushdown (expr:expr) (pred:predicate option) : expr =
   match expr with
-  | SELECT(expr') ->
-      SELECT(pushdown expr' pred)
-  | PROJECT(projPred, expr') ->
+  | PROJECT(expr') ->
+      PROJECT(pushdown expr' pred)
+  | SELECT(projPred, expr') ->
       (* New predicate to push down *)
-      (* TODO: check if project is applied, unwrap this *)
-      (* TODO: accumulate these projections and push them down *)
-      PROJECT(projPred, pushdown expr' (Some projPred))
+      (* TODO: check if selection is applied, unwrap this *)
+      (* TODO: accumulate these selections and push them down *)
+      SELECT(projPred, pushdown expr' (Some projPred))
   (* Once a JOIN is encountered, we just apply the predicate based on the equality *)
   | JOIN(_, _, _, _) -> match pred with
     | None -> expr (* no predicates to push down *)

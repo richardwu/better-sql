@@ -1,10 +1,28 @@
-build:
-	ocamlopt -c expr.ml
-	ocamlopt -c pushdown.ml
-	ocamlopt -c main.ml
-	ocamlopt -o main expr.cmx pushdown.cmx
+DEPENDS = extlib
+MAIN = main
+# Topologically ordered dependencies.
+# TODO(richardwu): Figure out a better way to do this.
+OBJECTS = table.cmo columnsPerTable.cmo columns.cmo expr.cmo props_test.cmo
+INTERFACES = $(OBJECTS:%.cmo=%.cmi)
+CC = ocamlc
 
-.PHONY: clean
+
+.PHONY: setup
+setup: $(DEPENDS)
+$(DEPENDS):
+	opam install $@
+
+.PHONY: build
+build: $(MAIN)
+
+%.cmi: %.mli
+	$(CC) -c $<
+
+%.cmo: %.ml
+	$(CC) -c $<
+
+$(MAIN): $(INTERFACES) $(OBJECTS)
+	$(CC) -o $(MAIN) $(OBJECTS)
 
 clean:
-	rm -f *.o *.cmx *.cmi main
+	rm -f $(OBJECTS) $(INTERFACES) $(MAIN)
