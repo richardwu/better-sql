@@ -1,4 +1,13 @@
+# Intermediate object files
 *.cmi
 *.cmo
+
+# Binaries
 main
+
+# Test files
 *_test
+
+# OUnit logs and cache
+*.log
+*.cache

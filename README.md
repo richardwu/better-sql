@@ -42,3 +42,9 @@ open Expr;;    (* elides the need to prefix with module name *)
 let e1 = fromOp(SCAN(Table.fromName "a"));;
 Columns.prettyprint (columns e1);;
 ```
+
+## Testing
+
+```
+make test
+```
