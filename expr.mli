@@ -1,11 +1,3 @@
-type compOp =
-  | Eq
-  | Lt
-  | Gt
-  | Le
-  | Ge
-  | Ne
-
 type joinType =
   | Inner
   | Full
@@ -20,29 +12,21 @@ type props =
   ColumnsPerTable.t Columns.t option   (* output columns (multiple tables) of an expression *)
   (* * some other prop *)
 
-type predicate =
-  | Compare of t * compOp * t
-  | Or of predicate * predicate
-  | Not of predicate
-and cnf =
-  | Pred of predicate
-  (* right-most derivation prevents ambiguity: this may be useful later *)
-  | And of predicate * cnf
 (* TODO(richardwu): Is it better to have a list of children 'expr' instead of a
  * fixed cross-product of them? *)
 (* With a list, we can avoid pattern matching every expr when updating properties
  * or when performing transformations *)
 (* Then again, the power of a functional language is precise pattern matching *)
-and op =
+type op =
   | SELECT of
-    predicate       (* filter expression *)
+    t Cnf.t     (* filter expression *)
     * t
   | PROJECT of
     ColumnsPerTable.t Columns.t       (* set of columns across multiple tables *)
     * t
   | JOIN of
     joinType
-    * predicate     (* join predicate *)
+    * t Cnf.t     (* join predicate *)
     * t          (* left *)
     * t          (* right *)
   | SCAN of

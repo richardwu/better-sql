@@ -1,11 +1,3 @@
-type compOp =
-  | Eq
-  | Lt
-  | Gt
-  | Le
-  | Ge
-  | Ne
-
 type joinType =
   | Inner
   | Full
@@ -16,23 +8,16 @@ type props =
   Props of
   ColumnsPerTable.t Columns.t option
 
-type predicate =
-  | Compare of t * compOp * t
-  | Or of predicate * predicate
-  | Not of predicate
-and cnf =
-  | Pred of predicate
-  | And of predicate * cnf
-and op =
+type op =
   | SELECT of
-    predicate
+    t Cnf.t
     * t
   | PROJECT of
     ColumnsPerTable.t Columns.t
     * t
   | JOIN of
     joinType
-    * predicate
+    * t Cnf.t
     * t
     * t
   | SCAN of

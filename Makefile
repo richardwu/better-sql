@@ -1,8 +1,8 @@
 DEPENDS = extlib
 MAIN = main
 # Topologically ordered dependencies.
-# TODO(richardwu): Figure out a better way to do this.
-OBJECTS = table.cmo columnsPerTable.cmo columns.cmo expr.cmo props_test.cmo
+# TODO(richardwu): Figure out a better way to do this (i.e. ocamldep )
+OBJECTS = table.cmo columnsPerTable.cmo columns.cmo cnf.cmo expr.cmo props_test.cmo
 INTERFACES = $(OBJECTS:%.cmo=%.cmi)
 CC = ocamlc
 
