@@ -82,6 +82,8 @@ let rec compTrans compA compB =
       | Gt, (Lt as replace)
       | Ge, (Le as replace) ->
           compTrans (r, replace, l) compB
+      (* TODO(richardwu): A Lt B, B Le C --> A < C is also transitive
+       * (similarly for Gt/Ge *).
       (* Note: Eq/Other expressions were handled in the first conditional *)
       | _ -> None
       end
@@ -110,11 +112,14 @@ let rec predTrans predA predB =
           Some(Or(pred1, result2))
       | Some(result1), None ->
           Some(Or(result1, pred2))
-      (* Both sides produced transitive expressions *)
-      (* TODO(richardwu): do we need to do Or(pred1,
-       * result2) and Or(result1, pred2) *)
-      (* I think we do: to generate the power sets of
-       * these predicates with their transitive results *)
+      (* Both sides produced transitive expressions.
+       * TODO(richardwu): do we need to do Or(pred1, result2) and Or(result1,
+       * pred2)
+       * I think we do: to generate the power sets of these predicates with
+       * their transitive results.
+       * That is: Or(pred1, result2), Or (result1, pred2) and Or(result1,
+       * result2) are all distinct transitive results.
+       * Maybe return an 'a predicate option list? *)
       | Some(result1), Some(result2) ->
           Some(Or(result1, result2))
       end
