@@ -11,4 +11,5 @@ let e2 = fromOp
     fromOp (SCAN(Table.fromName "a")),
     fromOp (SCAN(Table.fromName "b"))
   ))
+
 let _ = Columns.prettyprint (columns e2)

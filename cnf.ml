@@ -1,3 +1,4 @@
+(* Types *)
 type compOp =
   | Eq
   | Ne
@@ -5,6 +6,17 @@ type compOp =
   | Gt
   | Le
   | Ge
+
+type 'a comparison = 'a * compOp * 'a
+
+type 'a predicate =
+  | Comp of 'a comparison
+  | Not of 'a predicate
+  | Or of 'a predicate * 'a predicate
+
+type 'a t = Pred of 'a predicate | And of 'a t * 'a t
+
+(* String functions *)
 
 let stringOfOp = function
   | Eq -> "="
@@ -14,19 +26,107 @@ let stringOfOp = function
   | Le -> "<="
   | Ge -> ">="
 
-type 'a comparison = 'a * compOp * 'a
+let stringComp strConv (l, op, r) =
+  (strConv l) ^ " " ^ stringOfOp op ^ " " ^ (strConv r)
 
-let stringComp strConv = function
+let stringCompOpt strConv = function
   | None -> "None"
-  | Some(l, op, r) ->
-      (strConv l) ^ " " ^ stringOfOp op ^ " " ^ (strConv r)
+  | Some(comp) -> stringComp strConv comp
 
-type 'a predicate =
-  | Comp of 'a comparison
-  | Or of 'a predicate * 'a predicate
-  | Not of 'a predicate
+let rec stringPred strConv = function
+  | Comp(comp) ->
+      stringComp strConv comp
+  | Not(pred) ->
+      "¬(" ^ stringPred strConv pred ^ ")"
+  | Or(pred1, pred2) ->
+      "(" ^ stringPred strConv pred1 ^ ") ∨ (" ^ stringPred strConv pred2 ^ ")"
 
-type 'a t = Pred of 'a predicate | And of 'a t * 'a t
+let stringPredList strConv = function
+  | [] -> "[]"
+  | predList ->
+      "[" ^ String.concat ", " (List.map (stringPred strConv) predList) ^ "]"
+
+let rec stringCNF strConv = function
+  | Pred(pred) ->
+      stringPred strConv pred
+  | And(cnf1, cnf2) ->
+      "(" ^ stringCNF strConv cnf1 ^ ") ∧ (" ^ stringCNF strConv cnf2 ^ ")"
+
+let stringCNFOpt strConv = function
+  | None -> "None"
+  | Some(cnf) ->
+      stringCNF strConv cnf
+
+(* Helper functions *)
+
+let negateOp = function
+  | Eq -> Ne
+  | Ne -> Eq
+  | Lt -> Ge
+  | Gt -> Le
+  | Le -> Gt
+  | Ge -> Lt
+
+let rec unwrapNot = function
+  | Not(Not(inner)) -> unwrapNot inner
+  | Not(Comp(l, op, r)) -> Comp(l, (negateOp op), r)
+  (* TODO(richardwu): We can use DeMorgan's Law to convert ¬(A OR B) --> ¬A AND
+   * ¬B; however, we can't currently do this since AND's are part of the CNF
+   * type.
+   * The other option is to return a list of predicates (semantically the
+   * same). *)
+  | pred -> pred
+
+(* Equality functions *)
+
+let predListEq predsA predsB =
+  if predsA = predsB then
+    true
+  else if (List.compare_lengths predsA predsB) != 0 then
+    false
+  else
+    (* O(n^2) check to see if there exists an element of predsA (predA) in
+    * predsB for all predA) *)
+    List.for_all (fun predA -> List.mem predA predsB) predsA
+
+let cnfEq cnfA cnfB =
+  (* containedIn checks if cnfA is a subset of cnfB, where each element of
+   * a CNF is defined as a Pred(). *)
+  let rec containedIn cnfA cnfB =
+    begin match cnfA, cnfB with
+    | And(cnf1, cnf2), And(_, _) ->
+        (* We want to break down the LHS until eventually we get Pred()s,
+         * which we can then apply the next match case *)
+        (containedIn cnf1 cnfB) && (containedIn cnf2 cnfB)
+    | Pred(_), And(cnf1, cnf2) ->
+        (* We break down the RHS now to until we get only Pred()s to compare
+         * with the LHS, which is the next match case *)
+        (containedIn cnfA cnf1) || (containedIn cnfA cnf2)
+    | Pred(predA), Pred(predB) ->
+        predA = predB
+    | And(_, _), Pred(_) ->
+        (* 2+ predicates cannot possibly be contained in 1 predicate *)
+        false
+    end in
+  if cnfA = cnfB then
+    true
+  else
+    (* TODO(richardwu): this may be more efficient (although requires more
+     * code) to just check one "containsIn" then check for equal # of Preds.
+     * This passes for duplicates but it shouldn't. *)
+    (containedIn cnfA cnfB) && (containedIn cnfB cnfA)
+
+let cnfOptEq cnfAOpt cnfBOpt =
+  match cnfAOpt, cnfBOpt with
+  | None, None ->
+      true
+  | None, _
+  | _, None ->
+      false
+  | Some(cnf1), Some(cnf2) ->
+      cnfEq cnf1 cnf2
+
+(* Transitive functions *)
 
 let rec compTrans compA compB =
   match compA, compB with
@@ -68,6 +168,12 @@ let rec compTrans compA compB =
         (* A >= B, B >= C --> A >= C *)
         if r = l' && l != r' then
           Some(l, op, r')
+        (* A < B, C < A --> C < A *)
+        (* A <= B, C <= A --> C <= A *)
+        (* A > B, C > A --> C > B *)
+        (* A >= B, C >= A --> C >= B *)
+        else if l = r' && l' != r then
+          Some(l', op, r)
         else
           None
       end
@@ -87,9 +193,17 @@ let rec compTrans compA compB =
       | Ge, (Gt as replace) ->
           (* We always replace with the strict inequality since it's more restrictive *)
           (* A < B, B <= C --> A < C *)
+          (* A <= B, B < C --> A < C *)
           (* A > B, B >= C --> A > C *)
+          (* A >= B, B > C --> A > C *)
           if r = l' && l != r' then
             Some(l, replace, r')
+          (* A < B, C <= A --> C < B *)
+          (* A <= B, C < A --> C < B *)
+          (* A > B, C >= A --> C > B *)
+          (* A >= B, C > A --> C > B *)
+          else if l = r' && l' != r then
+            Some(l', replace, r)
           else
             None
       | Lt, Ge ->
@@ -103,19 +217,29 @@ let rec compTrans compA compB =
       end
 
 let rec predTrans predA predB =
+  (* We prefer Comp/Or expressions without NOTs since it's
+   * easier to reason about them (i.e. our compTrans is more complete). *)
+  let predA = unwrapNot predA in
+  let predB = unwrapNot predB in
   match predA, predB with
   | Comp(compA), Comp(compB) ->
       begin match compTrans compA compB with
       | None -> []
       | Some(result) -> [Comp(result)]
       end
-  | Not(pred'), pred
-  | pred, Not(pred') ->
-      begin match predTrans pred pred' with
-      | [] -> []
-      | results ->
-          List.map (fun res -> Not(res)) results
-      end
+  | Not(_), _
+  | _, Not(_) ->
+      (* This should only happen when OR is inside the NOT since other
+       * predicates are unwrapped (see comment above func unwrapNot).
+       * We can't really propagate transitivity inside NOTs.
+       * counterexample: A < B, ¬(B < C) does NOT imply ¬(A < C)
+       *  for A = C = 1, B = 2.
+       * Instead, we unwrap these NOTs beforehand. *)
+      []
+  | Or(_, _), Or(_, _) ->
+      (* We can't distribute ORs because either sub-predicate could be
+       * false. *)
+      []
   | Or(pred1, pred2), pred
   | pred, Or(pred1, pred2) ->
       begin match (predTrans pred pred1), (predTrans pred pred2) with
@@ -135,9 +259,6 @@ let rec predTrans predA predB =
           List.flatten(List.map iterResults1 results1)
       end
 
-(* fromPredList is a helper function that returns the CNF expression for a list
- * of simple predicates ANDed together
- * E.g. fromPredList [A = B, C < D] --> A = B AND C < D *)
 let rec fromPredList predList =
   match predList with
   | [] -> None
